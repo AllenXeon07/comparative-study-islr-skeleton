@@ -1,0 +1,20 @@
+# GPU: requires NVIDIA drivers on host + NVIDIA Container Toolkit.
+# Install toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+# Then: docker compose up --build
+services:
+  dev-container:
+    build: .
+    container_name: gpu_ai_dev_env
+    # Maps your current WSL folder to /app inside the container
+    volumes:
+      - .:/app
+    # Request GPU access for regular docker compose runs.
+    gpus: all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+    # Keeps the container running in the background
+    tty: true
+    stdin_open: true
+    ports:
+      - "8890:8890"

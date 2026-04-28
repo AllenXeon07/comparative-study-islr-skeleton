@@ -1,0 +1,38 @@
+{
+    "name": "GPU ML Development",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "dev-container",
+    "workspaceFolder": "/app",
+    "shutdownAction": "stopCompose",
+    "forwardPorts": [8890, 1455],
+    "portsAttributes": {
+      "8890": {
+        "label": "Jupyter Notebook",
+        "onAutoForward": "notify"
+      },
+      "1455": {
+        "label": "OpenAI Auth Callback",
+        "onAutoForward": "openBrowserOnce"
+      }
+    },
+    "features": {
+      "ghcr.io/devcontainers/features/common-utils:1": {
+        "installZsh": true,
+        "configureZshAsDefaultShell": true
+      }
+    },
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "openai.chatgpt",
+          "ms-python.python",
+          "ms-toolsai.jupyter",
+          "nvidia.nsight-vscode-edition"
+        ]
+      }
+    },
+  
+    "remoteUser": "root",
+    "postCreateCommand": "python3 .devcontainer/check_gpu.py || true",
+    "postStartCommand": "bash -lc \"if ! pgrep -f 'jupyter-notebook|jupyter notebook' >/dev/null; then nohup jupyter notebook --ip=0.0.0.0 --allow-root --no-browser --port=8890 --ServerApp.allow_remote_access=1 >/tmp/jupyter.log 2>&1 & fi\""
+  }
