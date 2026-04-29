@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import urllib.request
 from contextlib import ExitStack
 from pathlib import Path
@@ -40,6 +41,9 @@ EXPECTED_BODY_POINTS = 33
 EXPECTED_FACE_POINTS = 478
 TARGET_FRAME_COUNT = 10
 LANDMARK_CHANNELS = {0: "x", 1: "y", 2: "z", 3: "visibility", 4: "presence"}
+PROCESS_HAND = True
+PROCESS_BODY = False
+PROCESS_FACE = False
 
 HAND_KEYPOINT_INDEX = {
     0: "wrist",
@@ -103,6 +107,7 @@ BODY_KEYPOINT_INDEX = {
 
 FACE_KEYPOINT_INDEX = {index: f"face_{index}" for index in range(EXPECTED_FACE_POINTS)}
 HAND_SIDE_INDEX = {0: "left", 1: "right"}
+HAND_OUTPUT_ORDER = ("left", "right")
 
 MISSING_POINT = {
     "x": np.nan,
@@ -122,6 +127,7 @@ PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
 FaceLandmarker = mp.tasks.vision.FaceLandmarker
 FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
+MEDIAPIPE_DELEGATE_ENV = "MEDIAPIPE_DELEGATE"
 
 
 def ensure_model(model_path: Path, download_url: str) -> None:
@@ -136,6 +142,19 @@ def ensure_models() -> None:
     ensure_model(HAND_MODEL_PATH, HAND_MODEL_URL)
     ensure_model(POSE_MODEL_PATH, POSE_MODEL_URL)
     ensure_model(FACE_MODEL_PATH, FACE_MODEL_URL)
+
+
+def ensure_requested_models(
+    include_hand: bool,
+    include_body: bool,
+    include_face: bool,
+) -> None:
+    if include_hand:
+        ensure_model(HAND_MODEL_PATH, HAND_MODEL_URL)
+    if include_body:
+        ensure_model(POSE_MODEL_PATH, POSE_MODEL_URL)
+    if include_face:
+        ensure_model(FACE_MODEL_PATH, FACE_MODEL_URL)
 
 
 def create_base_options(model_path: Path, delegate: BaseOptions.Delegate) -> BaseOptions:
@@ -174,8 +193,24 @@ def build_face_options(delegate: BaseOptions.Delegate) -> FaceLandmarkerOptions:
     )
 
 
+def get_delegate_order() -> list[BaseOptions.Delegate]:
+    requested_delegate = os.environ.get(MEDIAPIPE_DELEGATE_ENV, "cpu").strip().lower()
+    delegate_map = {
+        "cpu": [BaseOptions.Delegate.CPU],
+        "gpu": [BaseOptions.Delegate.GPU],
+        "auto": [BaseOptions.Delegate.GPU, BaseOptions.Delegate.CPU],
+    }
+    if requested_delegate not in delegate_map:
+        allowed = ", ".join(sorted(delegate_map))
+        raise ValueError(
+            f"Unsupported {MEDIAPIPE_DELEGATE_ENV}={requested_delegate!r}. "
+            f"Expected one of: {allowed}."
+        )
+    return delegate_map[requested_delegate]
+
+
 def create_landmarker(factory, options_builder, name: str):
-    delegates = [BaseOptions.Delegate.GPU, BaseOptions.Delegate.CPU]
+    delegates = get_delegate_order()
     errors = []
     for delegate in delegates:
         try:
@@ -307,11 +342,24 @@ def normalize_landmarks(
     return normalized
 
 
+def infer_hand_side(landmarks: list[dict[str, float]]) -> str | None:
+    if not landmarks:
+        return None
+
+    wrist_x = float(landmarks[0].get("x", np.nan))
+    if np.isnan(wrist_x):
+        return None
+
+    return "left" if wrist_x <= 0.5 else "right"
+
+
 def classify_hands(hand_entries: list[dict[str, object]]) -> dict[str, list[dict[str, float]]]:
-    hands = {"left": [], "right": []}
+    hands = {side: [] for side in HAND_OUTPUT_ORDER}
+    unassigned: list[list[dict[str, float]]] = []
+
     for entry in hand_entries:
         handedness = entry.get("handedness", [])
-        label = "unknown"
+        label = None
         if handedness:
             category_name = (handedness[0].get("category_name") or "").lower()
             if category_name in hands:
@@ -320,10 +368,20 @@ def classify_hands(hand_entries: list[dict[str, object]]) -> dict[str, list[dict
         landmarks = entry.get("landmarks", [])
         if label in hands and not hands[label]:
             hands[label] = landmarks
-        elif not hands["left"]:
-            hands["left"] = landmarks
-        elif not hands["right"]:
-            hands["right"] = landmarks
+            continue
+
+        inferred_label = infer_hand_side(landmarks)
+        if inferred_label in hands and not hands[inferred_label]:
+            hands[inferred_label] = landmarks
+            continue
+
+        unassigned.append(landmarks)
+
+    for landmarks in unassigned:
+        for side in HAND_OUTPUT_ORDER:
+            if not hands[side]:
+                hands[side] = landmarks
+                break
 
     return hands
 
@@ -368,47 +426,72 @@ def skeleton_output_paths(
     video_path: Path,
     input_root: Path,
     output_folder: Path,
-) -> tuple[Path, Path, Path]:
+) -> dict[str, Path]:
     relative_path = video_path.relative_to(input_root).with_suffix(".npy")
-    return (
-        output_folder / "body" / relative_path,
-        output_folder / "hand" / relative_path,
-        output_folder / "face" / relative_path,
+    return {
+        "body": output_folder / "body" / relative_path,
+        "hand": output_folder / "hand" / relative_path,
+        "face": output_folder / "face" / relative_path,
+    }
+
+
+def skeleton_outputs_exist(
+    video_path: Path,
+    input_root: Path,
+    output_folder: Path,
+    include_hand: bool,
+    include_body: bool,
+    include_face: bool,
+) -> bool:
+    requested_parts = {
+        "hand": include_hand,
+        "body": include_body,
+        "face": include_face,
+    }
+    output_paths = skeleton_output_paths(video_path, input_root, output_folder)
+    return all(
+        output_paths[part].exists()
+        for part, enabled in requested_parts.items()
+        if enabled
     )
 
 
-def skeleton_outputs_exist(video_path: Path, input_root: Path, output_folder: Path) -> bool:
-    return all(path.exists() for path in skeleton_output_paths(video_path, input_root, output_folder))
+def write_index_maps(
+    output_folder: Path,
+    include_hand: bool,
+    include_body: bool,
+    include_face: bool,
+) -> None:
+    if include_body:
+        body_dir = output_folder / "body"
+        body_dir.mkdir(parents=True, exist_ok=True)
+        np.save(
+            body_dir / "keypoint_index.npy",
+            {"keypoints": BODY_KEYPOINT_INDEX, "channels": LANDMARK_CHANNELS},
+            allow_pickle=True,
+        )
 
+    if include_hand:
+        hand_dir = output_folder / "hand"
+        hand_dir.mkdir(parents=True, exist_ok=True)
+        np.save(
+            hand_dir / "keypoint_index.npy",
+            {
+                "keypoints": HAND_KEYPOINT_INDEX,
+                "channels": LANDMARK_CHANNELS,
+                "hands": HAND_SIDE_INDEX,
+            },
+            allow_pickle=True,
+        )
 
-def write_index_maps(output_folder: Path) -> None:
-    body_dir = output_folder / "body"
-    hand_dir = output_folder / "hand"
-    face_dir = output_folder / "face"
-
-    body_dir.mkdir(parents=True, exist_ok=True)
-    hand_dir.mkdir(parents=True, exist_ok=True)
-    face_dir.mkdir(parents=True, exist_ok=True)
-
-    np.save(
-        body_dir / "keypoint_index.npy",
-        {"keypoints": BODY_KEYPOINT_INDEX, "channels": LANDMARK_CHANNELS},
-        allow_pickle=True,
-    )
-    np.save(
-        hand_dir / "keypoint_index.npy",
-        {
-            "keypoints": HAND_KEYPOINT_INDEX,
-            "channels": LANDMARK_CHANNELS,
-            "hands": HAND_SIDE_INDEX,
-        },
-        allow_pickle=True,
-    )
-    np.save(
-        face_dir / "keypoint_index.npy",
-        {"keypoints": FACE_KEYPOINT_INDEX, "channels": LANDMARK_CHANNELS},
-        allow_pickle=True,
-    )
+    if include_face:
+        face_dir = output_folder / "face"
+        face_dir.mkdir(parents=True, exist_ok=True)
+        np.save(
+            face_dir / "keypoint_index.npy",
+            {"keypoints": FACE_KEYPOINT_INDEX, "channels": LANDMARK_CHANNELS},
+            allow_pickle=True,
+        )
 
 
 def process_video(
@@ -419,16 +502,22 @@ def process_video(
     pose_landmarker,
     face_landmarker,
     timestamp_offset_ms: int,
+    include_hand: bool,
+    include_body: bool,
+    include_face: bool,
 ) -> int:
-    body_output, hand_output, face_output = skeleton_output_paths(
+    output_paths = skeleton_output_paths(
         video_path,
         input_root,
         output_folder,
     )
-
-    body_output.parent.mkdir(parents=True, exist_ok=True)
-    hand_output.parent.mkdir(parents=True, exist_ok=True)
-    face_output.parent.mkdir(parents=True, exist_ok=True)
+    for part, enabled in (
+        ("body", include_body),
+        ("hand", include_hand),
+        ("face", include_face),
+    ):
+        if enabled:
+            output_paths[part].parent.mkdir(parents=True, exist_ok=True)
 
     source_frames, fps = load_video_frames_numpy(video_path)
     sampled_frame_indices = sample_frame_indices(len(source_frames))
@@ -459,66 +548,79 @@ def process_video(
     for frame, timestamp_ms in zip(sampled_frames, sampled_timestamps_ms):
         mp_image = frame_to_mp_image(frame)
 
-        hand_result = hand_landmarker.detect_for_video(mp_image, timestamp_ms)
-        pose_result = pose_landmarker.detect_for_video(mp_image, timestamp_ms)
-        #face_result = face_landmarker.detect_for_video(mp_image, timestamp_ms)
-
-        serialized_hands = serialize_hand_result(hand_result)
-        serialized_body = serialize_pose_result(pose_result)
-        #serialized_face = serialize_face_result(face_result)
-
-        hands = classify_hands(serialized_hands)
-        left_hand = normalize_landmarks(
-            hands.get("left", []),
-            EXPECTED_HAND_POINTS,
-            fallback=last_valid["left_hand"],
-        )
-        right_hand = normalize_landmarks(
-            hands.get("right", []),
-            EXPECTED_HAND_POINTS,
-            fallback=last_valid["right_hand"],
-        )
-        body = normalize_landmarks(
-            serialized_body[0] if serialized_body else [],
-            EXPECTED_BODY_POINTS,
-            fallback=last_valid["body"],
-        )
-        # face = normalize_landmarks(
-        #     serialized_face[0] if serialized_face else [],
-        #     EXPECTED_FACE_POINTS,
-        #     fallback=last_valid["face"],
-        # )
-
-        if has_valid_x_coordinate(left_hand):
-            last_valid["left_hand"] = [dict(point) for point in left_hand]
-        if has_valid_x_coordinate(right_hand):
-            last_valid["right_hand"] = [dict(point) for point in right_hand]
-        if has_valid_x_coordinate(body):
-            last_valid["body"] = [dict(point) for point in body]
-        # if has_valid_x_coordinate(face):
-        #     last_valid["face"] = [dict(point) for point in face]
-
-        hand_frames.append(
-            np.stack(
-                [landmarks_to_array(left_hand), landmarks_to_array(right_hand)],
-                axis=0,
+        if include_hand:
+            hand_result = hand_landmarker.detect_for_video(mp_image, timestamp_ms)
+            serialized_hands = serialize_hand_result(hand_result)
+            hands = classify_hands(serialized_hands)
+            left_hand = normalize_landmarks(
+                hands.get("left", []),
+                EXPECTED_HAND_POINTS,
+                fallback=last_valid["left_hand"],
             )
-        )
-        body_frames.append(landmarks_to_array(body))
-        # face_frames.append(landmarks_to_array(face))
+            right_hand = normalize_landmarks(
+                hands.get("right", []),
+                EXPECTED_HAND_POINTS,
+                fallback=last_valid["right_hand"],
+            )
 
-    if not body_frames:
+            if has_valid_x_coordinate(left_hand):
+                last_valid["left_hand"] = [dict(point) for point in left_hand]
+            if has_valid_x_coordinate(right_hand):
+                last_valid["right_hand"] = [dict(point) for point in right_hand]
+
+            hand_frames.append(
+                np.stack(
+                    [landmarks_to_array(left_hand), landmarks_to_array(right_hand)],
+                    axis=0,
+                )
+            )
+
+        if include_body:
+            pose_result = pose_landmarker.detect_for_video(mp_image, timestamp_ms)
+            serialized_body = serialize_pose_result(pose_result)
+            body = normalize_landmarks(
+                serialized_body[0] if serialized_body else [],
+                EXPECTED_BODY_POINTS,
+                fallback=last_valid["body"],
+            )
+            if has_valid_x_coordinate(body):
+                last_valid["body"] = [dict(point) for point in body]
+            body_frames.append(landmarks_to_array(body))
+
+        if include_face:
+            face_result = face_landmarker.detect_for_video(mp_image, timestamp_ms)
+            serialized_face = serialize_face_result(face_result)
+            face = normalize_landmarks(
+                serialized_face[0] if serialized_face else [],
+                EXPECTED_FACE_POINTS,
+                fallback=last_valid["face"],
+            )
+            if has_valid_x_coordinate(face):
+                last_valid["face"] = [dict(point) for point in face]
+            face_frames.append(landmarks_to_array(face))
+
+    if include_body and not body_frames:
         raise ValueError(f"No skeleton frames generated for {video_path}")
 
-    np.save(body_output, np.stack(body_frames, axis=0))
-    np.save(hand_output, np.stack(hand_frames, axis=0))
-    # np.save(face_output, np.stack(face_frames, axis=0))
+    if include_body:
+        np.save(output_paths["body"], np.stack(body_frames, axis=0))
+    if include_hand:
+        np.save(output_paths["hand"], np.stack(hand_frames, axis=0))
+    if include_face:
+        np.save(output_paths["face"], np.stack(face_frames, axis=0))
 
     frame_ms = max(1, int(round(1000.0 / fps)))
     return sampled_timestamps_ms[-1] + frame_ms
 
 
 def main() -> None:
+    include_hand = PROCESS_HAND
+    include_body = PROCESS_BODY
+    include_face = PROCESS_FACE
+
+    if not any((include_hand, include_body, include_face)):
+        raise ValueError("At least one of PROCESS_HAND, PROCESS_BODY, or PROCESS_FACE must be True.")
+
     input_root = RAW_DATASET_DIR.resolve()
     output_root = SKELETON_DATASET_DIR.resolve()
     if not input_root.is_dir():
@@ -528,16 +630,30 @@ def main() -> None:
     if not video_paths:
         raise FileNotFoundError(f"No supported video files found under {input_root}")
 
-    write_index_maps(output_root)
+    write_index_maps(output_root, include_hand, include_body, include_face)
     pending_video_paths = [
         video_path
         for video_path in video_paths
-        if not skeleton_outputs_exist(video_path, input_root, output_root)
+        if not skeleton_outputs_exist(
+            video_path,
+            input_root,
+            output_root,
+            include_hand,
+            include_body,
+            include_face,
+        )
     ]
     skipped_count = len(video_paths) - len(pending_video_paths)
 
     for video_path in video_paths:
-        if skeleton_outputs_exist(video_path, input_root, output_root):
+        if skeleton_outputs_exist(
+            video_path,
+            input_root,
+            output_root,
+            include_hand,
+            include_body,
+            include_face,
+        ):
             print(f"Skipping existing {video_path.relative_to(input_root)}")
 
     if not pending_video_paths:
@@ -547,27 +663,38 @@ def main() -> None:
         )
         return
 
-    ensure_models()
+    ensure_requested_models(include_hand, include_body, include_face)
     with ExitStack() as stack:
-        hand_landmarker, hand_delegate = create_landmarker(
-            HandLandmarker, build_hand_options, "hand landmarker"
-        )
-        pose_landmarker, pose_delegate = create_landmarker(
-            PoseLandmarker, build_pose_options, "pose landmarker"
-        )
-        face_landmarker, face_delegate = create_landmarker(
-            FaceLandmarker, build_face_options, "face landmarker"
-        )
+        hand_landmarker = None
+        pose_landmarker = None
+        face_landmarker = None
+        hand_delegate = None
+        pose_delegate = None
+        face_delegate = None
 
-        hand_landmarker = stack.enter_context(hand_landmarker)
-        pose_landmarker = stack.enter_context(pose_landmarker)
-        face_landmarker = stack.enter_context(face_landmarker)
+        if include_hand:
+            hand_landmarker, hand_delegate = create_landmarker(
+                HandLandmarker, build_hand_options, "hand landmarker"
+            )
+            hand_landmarker = stack.enter_context(hand_landmarker)
+
+        if include_body:
+            pose_landmarker, pose_delegate = create_landmarker(
+                PoseLandmarker, build_pose_options, "pose landmarker"
+            )
+            pose_landmarker = stack.enter_context(pose_landmarker)
+
+        if include_face:
+            face_landmarker, face_delegate = create_landmarker(
+                FaceLandmarker, build_face_options, "face landmarker"
+            )
+            face_landmarker = stack.enter_context(face_landmarker)
 
         print(
             "Loaded models once. "
-            f"Delegates -> hand: {hand_delegate.name}, "
-            f"body: {pose_delegate.name}", 
-            f"face: {face_delegate.name}"
+            f"Delegates -> hand: {hand_delegate.name if hand_delegate else 'disabled'}, "
+            f"body: {pose_delegate.name if pose_delegate else 'disabled'}, "
+            f"face: {face_delegate.name if face_delegate else 'disabled'}"
         )
 
         timestamp_offset_ms = 0
@@ -580,6 +707,9 @@ def main() -> None:
                 pose_landmarker,
                 face_landmarker,
                 timestamp_offset_ms,
+                include_hand,
+                include_body,
+                include_face,
             )
 
     print(

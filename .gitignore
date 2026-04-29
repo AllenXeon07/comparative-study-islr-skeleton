@@ -1,1 +1,4 @@
 Dataset/
+artifacts/
+__pycache__/
+*.pyc
