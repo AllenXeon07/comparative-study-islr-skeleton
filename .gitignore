@@ -1,5 +1,6 @@
-Dataset/
+Dataset/raw/
 artifacts/
 __pycache__/
 *.pyc
 *Zone.Identifier
+Dataset.rar
