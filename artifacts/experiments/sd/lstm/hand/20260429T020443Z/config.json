@@ -1,0 +1,16 @@
+{
+  "artifacts_dir": "artifacts",
+  "batch_size": 16,
+  "dataset_dir": "Dataset",
+  "epochs": 10,
+  "input_shape": [
+    10,
+    210
+  ],
+  "learning_rate": 0.001,
+  "modality": "hand",
+  "model": "lstm",
+  "num_classes": 2731,
+  "scenario": "sd",
+  "seed": 42
+}

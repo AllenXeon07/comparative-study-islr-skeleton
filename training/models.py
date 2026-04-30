@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from keras import losses, metrics, optimizers
+from keras import losses, metrics, ops, optimizers
 from keras import Input, Model
 from keras.layers import (
     Add,
@@ -9,11 +9,70 @@ from keras.layers import (
     Dense,
     Dropout,
     GlobalAveragePooling1D,
+    GlobalAveragePooling2D,
+    Layer,
     LayerNormalization,
     LSTM,
     MultiHeadAttention,
+    Reshape,
     Bidirectional,
 )
+from keras.ops import einsum
+from keras.saving import register_keras_serializable
+
+
+@register_keras_serializable(package="training")
+class GraphConvolution(Layer):
+    """Simple graph convolution over the node axis with learnable adjacency."""
+
+    def __init__(self, units: int, activation: str | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.units = units
+        self.activation = activation
+
+    def build(self, input_shape) -> None:
+        if len(input_shape) != 4:
+            raise ValueError(
+                "GraphConvolution expects input shape (batch, time, nodes, channels)."
+            )
+        node_count = int(input_shape[-2])
+        input_channels = int(input_shape[-1])
+        self.adjacency = self.add_weight(
+            name="adjacency",
+            shape=(node_count, node_count),
+            initializer="identity",
+            trainable=True,
+        )
+        self.kernel = self.add_weight(
+            name="kernel",
+            shape=(input_channels, self.units),
+            initializer="glorot_uniform",
+            trainable=True,
+        )
+        self.bias = self.add_weight(
+            name="bias",
+            shape=(self.units,),
+            initializer="zeros",
+            trainable=True,
+        )
+        super().build(input_shape)
+
+    def call(self, inputs):
+        mixed_nodes = einsum("ij,btjc->btic", self.adjacency, inputs)
+        outputs = einsum("btic,cu->btiu", mixed_nodes, self.kernel)
+        outputs = outputs + self.bias
+        if self.activation == "relu":
+            return ops.relu(outputs)
+        if self.activation is None:
+            return outputs
+        raise ValueError(f"Unsupported activation for GraphConvolution: {self.activation}")
+
+    def get_config(self) -> dict[str, object]:
+        return {
+            **super().get_config(),
+            "units": self.units,
+            "activation": self.activation,
+        }
 
 
 def build_cnn1d(input_shape: tuple[int, int], num_classes: int) -> Model:
@@ -58,6 +117,29 @@ def build_transformer(input_shape: tuple[int, int], num_classes: int) -> Model:
     return Model(inputs=inputs, outputs=outputs, name="transformer_sign_classifier")
 
 
+def build_gcn(input_shape: tuple[int, int], num_classes: int) -> Model:
+    time_steps, feature_count = input_shape
+    if feature_count % 5 != 0:
+        raise ValueError(
+            "GCN requires the flattened feature dimension to be divisible by 5 "
+            f"(got {feature_count})."
+        )
+
+    node_count = feature_count // 5
+    inputs = Input(shape=input_shape, name="skeleton_sequence")
+    x = Reshape((time_steps, node_count, 5), name="reshape_to_graph")(inputs)
+    x = GraphConvolution(64, activation="relu", name="graph_conv_1")(x)
+    x = LayerNormalization(name="graph_norm_1")(x)
+    x = Dropout(0.2, name="graph_dropout_1")(x)
+    x = GraphConvolution(128, activation="relu", name="graph_conv_2")(x)
+    x = LayerNormalization(name="graph_norm_2")(x)
+    x = GlobalAveragePooling2D(name="spatiotemporal_pool")(x)
+    x = Dense(128, activation="relu", name="graph_projection")(x)
+    x = Dropout(0.2, name="graph_dropout_2")(x)
+    outputs = Dense(num_classes, activation="softmax", name="class_probs")(x)
+    return Model(inputs=inputs, outputs=outputs, name="gcn_sign_classifier")
+
+
 def build_model(
     model_name: str,
     input_shape: tuple[int, int],
@@ -68,6 +150,7 @@ def build_model(
         "cnn1d": build_cnn1d,
         "lstm": build_lstm,
         "transformer": build_transformer,
+        "gcn": build_gcn,
     }
     if model_name not in builders:
         raise ValueError(

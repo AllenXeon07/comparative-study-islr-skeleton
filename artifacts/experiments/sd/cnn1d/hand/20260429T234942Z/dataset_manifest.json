@@ -1,0 +1,409 @@
+{
+  "scenario": "sd",
+  "test_samples": [
+    {
+      "asl_lex_code": "J_02_105",
+      "gloss": "LABEL",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "27469263568791-LABEL.mp4"
+    },
+    {
+      "asl_lex_code": "H_03_094",
+      "gloss": "SIGNPAPER",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "8212971647934255-SIGN PAPER.mp4"
+    },
+    {
+      "asl_lex_code": "G_03_003",
+      "gloss": "GYM",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "23247991626849585-GYM.mp4"
+    },
+    {
+      "asl_lex_code": "J_01_077",
+      "gloss": "EMPTY2",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "8517954107198269-EMPTY 2.mp4"
+    },
+    {
+      "asl_lex_code": "H_03_007",
+      "gloss": "STORY1",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "7054386695414354-STORY 3.mp4"
+    },
+    {
+      "asl_lex_code": "G_03_059",
+      "gloss": "NICE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "14154575310664197-NICE.mp4"
+    },
+    {
+      "asl_lex_code": "J_02_092",
+      "gloss": "REMOVE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "7958435331951532-REMOVE.mp4"
+    },
+    {
+      "asl_lex_code": "H_01_059",
+      "gloss": "ANYONE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "21344274764159632-ANYONE.mp4"
+    },
+    {
+      "asl_lex_code": "J_01_015",
+      "gloss": "COMMUNITY",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "6742655874522336-COMMUNITY.mp4"
+    },
+    {
+      "asl_lex_code": "H_02_081",
+      "gloss": "WEAVE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "20880000068819649-WEAVE.mp4"
+    },
+    {
+      "asl_lex_code": "J_01_042",
+      "gloss": "GREET1",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "1676037390807208-GREET.mp4"
+    },
+    {
+      "asl_lex_code": "J_02_010",
+      "gloss": "SUPERVISOR",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "19379537971333316-SUPERVISOR.mp4"
+    },
+    {
+      "asl_lex_code": "J_03_036",
+      "gloss": "SPICY",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "8058014641528197-SPICY.mp4"
+    },
+    {
+      "asl_lex_code": "H_01_077",
+      "gloss": "FAIL",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "48967843716521897-FAIL.mp4"
+    },
+    {
+      "asl_lex_code": "H_01_019",
+      "gloss": "WATERDROP",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "7316392299762329-WATERDROP.mp4"
+    },
+    {
+      "asl_lex_code": "J_02_058",
+      "gloss": "EVERYNIGHT",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "7721480534101262-EVERY NIGHT.mp4"
+    },
+    {
+      "asl_lex_code": "J_01_005",
+      "gloss": "DONTFEELLIKE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "3628340866937836-DONT FEEL_LIKE.mp4"
+    },
+    {
+      "asl_lex_code": "J_02_100",
+      "gloss": "CELEBRATE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "010850214999561736-CELEBRATE.mp4"
+    },
+    {
+      "asl_lex_code": "J_03_031",
+      "gloss": "DEMOTE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "45613794376693106-DEMOTE.mp4"
+    },
+    {
+      "asl_lex_code": "J_02_004",
+      "gloss": "LAYDOWN",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "6490408879992484-LAY DOWN.mp4"
+    },
+    {
+      "asl_lex_code": "H_02_060",
+      "gloss": "PACK",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "9228494689014171-PACK.mp4"
+    },
+    {
+      "asl_lex_code": "G_02_036",
+      "gloss": "HUG",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "9618808117704574-HUG.mp4"
+    },
+    {
+      "asl_lex_code": "J_02_052",
+      "gloss": "WIDE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "038446216989295845-WIDE.mp4"
+    },
+    {
+      "asl_lex_code": "H_02_031",
+      "gloss": "INFLUENCE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "0033742275375785447-INFLUENCE.mp4"
+    },
+    {
+      "asl_lex_code": "K_01_035",
+      "gloss": "LICKENVELOPE1",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "test",
+      "video_file": "031670126370264784-LICK ENVELOPE.mp4"
+    }
+  ],
+  "test_size": 32943,
+  "train_samples": [
+    {
+      "asl_lex_code": "A_03_054",
+      "gloss": "APPLE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "15890366051589533-APPLE.mp4"
+    },
+    {
+      "asl_lex_code": "H_01_037",
+      "gloss": "CEMETERY",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "44939873429204336-CEMETERY.mp4"
+    },
+    {
+      "asl_lex_code": "H_02_026",
+      "gloss": "PROPOSE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "03369501517929252-PROPOSE.mp4"
+    },
+    {
+      "asl_lex_code": "H_02_087",
+      "gloss": "ALASKA",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "7552681133614059-ALASKA.mp4"
+    },
+    {
+      "asl_lex_code": "J_01_088",
+      "gloss": "LEND",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "5837296033724944-LEND.mp4"
+    },
+    {
+      "asl_lex_code": "G_03_091",
+      "gloss": "BACKPACK1",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "4520498201410337-BACKPACK.mp4"
+    },
+    {
+      "asl_lex_code": "A_01_056",
+      "gloss": "DOG1",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "49288220098651747-DOG.mp4"
+    },
+    {
+      "asl_lex_code": "H_01_043",
+      "gloss": "PONDER",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "02551571232229133-PONDER.mp4"
+    },
+    {
+      "asl_lex_code": "J_02_021",
+      "gloss": "PARANOID",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "5880724478842327-PARANOID.mp4"
+    },
+    {
+      "asl_lex_code": "G_03_086",
+      "gloss": "JOKE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "8643853796183107-JOKE.mp4"
+    },
+    {
+      "asl_lex_code": "E_03_028",
+      "gloss": "PARK",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "6958143575951994-PARK.mp4"
+    },
+    {
+      "asl_lex_code": "H_03_030",
+      "gloss": "SOCIAL",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "7480838717347633-SOCIAL.mp4"
+    },
+    {
+      "asl_lex_code": "H_03_088",
+      "gloss": "THERAPY",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "4066959996902433-THERAPY.mp4"
+    },
+    {
+      "asl_lex_code": "G_03_069",
+      "gloss": "PULLCONVINCE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "6523179384259175-PULL CONVINCE.mp4"
+    },
+    {
+      "asl_lex_code": "G_03_035",
+      "gloss": "JUICE1",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "19003684436528423-JUICE 2.mp4"
+    },
+    {
+      "asl_lex_code": "J_01_107",
+      "gloss": "SOPHOMORE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "8684706324228275-SOPHOMORE.mp4"
+    },
+    {
+      "asl_lex_code": "J_03_048",
+      "gloss": "INHALE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "7568259630004095-INHALE.mp4"
+    },
+    {
+      "asl_lex_code": "K_01_017",
+      "gloss": "CASTLE2",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "7069069415498499-CASTLE 2.mp4"
+    },
+    {
+      "asl_lex_code": "J_03_015",
+      "gloss": "ADVERTISE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "8450645349294537-ADVERTISE.mp4"
+    },
+    {
+      "asl_lex_code": "H_01_064",
+      "gloss": "STINK",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "37542279833186454-STINK.mp4"
+    },
+    {
+      "asl_lex_code": "H_03_040",
+      "gloss": "JEWELRY",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "008279096911288919-JEWELRY.mp4"
+    },
+    {
+      "asl_lex_code": "J_03_058",
+      "gloss": "FIRED",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "13187210101793911-FIRED.mp4"
+    },
+    {
+      "asl_lex_code": "H_03_099",
+      "gloss": "COOL3",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "9060451576078816-COOL 3.mp4"
+    },
+    {
+      "asl_lex_code": "J_01_072",
+      "gloss": "GOODYGOODYSHOEOPPOSITE",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "5064877659011977-GOODY GOODY_SHOE_OPPOSITE.mp4"
+    },
+    {
+      "asl_lex_code": "H_02_071",
+      "gloss": "PRECIOUS",
+      "participant_id": "P1",
+      "scenario": "sd",
+      "split": "train",
+      "video_file": "23746553103054158-PRECIOUS.mp4"
+    }
+  ],
+  "train_size": 50456
+}

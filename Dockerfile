@@ -19,7 +19,7 @@ RUN python3 -m pip install pip
 RUN python3 -m pip install jupyter  
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8890
+EXPOSE 8888
 
 # Start Jupyter Notebook by default
 CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--allow-root", "--no-browser"]

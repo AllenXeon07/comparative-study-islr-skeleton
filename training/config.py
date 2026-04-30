@@ -6,7 +6,7 @@ from pathlib import Path
 
 ALLOWED_SCENARIOS = ("sd", "si")
 ALLOWED_MODALITIES = ("hand", "hand_body", "hand_face", "body_hand_face")
-ALLOWED_MODELS = ("cnn1d", "lstm", "transformer")
+ALLOWED_MODELS = ("cnn1d", "lstm", "transformer", "gcn")
 
 
 @dataclass(slots=True)

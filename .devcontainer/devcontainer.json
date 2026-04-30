@@ -3,28 +3,19 @@
     "dockerComposeFile": "../docker-compose.yml",
     "service": "dev-container",
     "workspaceFolder": "/app",
-    "shutdownAction": "stopCompose",
-    "forwardPorts": [8890, 1455],
-    "portsAttributes": {
-      "8890": {
-        "label": "Jupyter Notebook",
-        "onAutoForward": "notify"
-      },
-      "1455": {
-        "label": "OpenAI Auth Callback",
-        "onAutoForward": "openBrowserOnce"
-      }
-    },
+  
+    // Features to add to the container (Optional but helpful)
     "features": {
       "ghcr.io/devcontainers/features/common-utils:1": {
         "installZsh": true,
         "configureZshAsDefaultShell": true
       }
     },
+  
+    // Extension IDs to install inside the container
     "customizations": {
       "vscode": {
         "extensions": [
-          "openai.chatgpt",
           "ms-python.python",
           "ms-toolsai.jupyter",
           "nvidia.nsight-vscode-edition"
@@ -32,7 +23,9 @@
       }
     },
   
+    // Use 'root' to match the Dockerfile or a specific user
     "remoteUser": "root",
-    "postCreateCommand": "python3 .devcontainer/check_gpu.py || true",
-    "postStartCommand": "bash -lc \"if ! pgrep -f 'jupyter-notebook|jupyter notebook' >/dev/null; then nohup jupyter notebook --ip=0.0.0.0 --allow-root --no-browser --port=8890 --ServerApp.allow_remote_access=1 >/tmp/jupyter.log 2>&1 & fi\""
+  
+    // Run a command after the container is created
+    "postCreateCommand": "pip3 install --break-system-packages -r requirements.txt || echo 'No requirements.txt found'"
   }

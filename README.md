@@ -100,6 +100,7 @@ Models currently implemented:
 - `cnn1d`
 - `lstm`
 - `transformer`
+- `gcn`
 
 Modalities currently implemented:
 
@@ -180,7 +181,7 @@ MODEL = "lstm"
 MODALITY = "hand_body"
 EPOCHS = 10
 BATCH_SIZE = 16
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 0.01
 SEED = 42
 ```
 
