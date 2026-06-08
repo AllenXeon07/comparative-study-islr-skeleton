@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
-from keras.utils import Sequence
+import torch
+from torch.utils.data import Dataset
 
 from .config import ALLOWED_MODALITIES
-from .preprocessing import load_preprocessed_component
+from .preprocessing import FEATURE_DTYPE, load_preprocessed_component
 
 
 SPLIT_FILES = {
@@ -89,21 +90,31 @@ def build_label_map(records: Iterable[SampleRecord]) -> dict[str, int]:
     return {label: index for index, label in enumerate(labels)}
 
 
-def sample_component_path(dataset_dir: Path, component: str, video_file: str) -> Path:
-    return dataset_dir / "skeleton" / "raw" / component / Path(video_file).with_suffix(".npy")
+def skeleton_feature_root(dataset_dir: Path, frame_sample_count: int) -> Path:
+    return dataset_dir / "skeleton" / f"{frame_sample_count}frame"
 
 
-def validate_modality_support(dataset_dir: Path, records: Iterable[SampleRecord], modality: str) -> None:
+def sample_component_path(dataset_dir: Path, frame_sample_count: int, component: str, video_file: str) -> Path:
+    return skeleton_feature_root(dataset_dir, frame_sample_count) / component / Path(video_file).with_suffix(".npy")
+
+
+def validate_modality_support(
+    dataset_dir: Path,
+    records: Iterable[SampleRecord],
+    modality: str,
+    frame_sample_count: int,
+) -> None:
     components = modality_components(modality)
     missing: list[str] = []
     sample_records = list(records)
+    feature_root = skeleton_feature_root(dataset_dir, frame_sample_count)
     for component in components:
-        component_dir = dataset_dir / "skeleton" / "raw" / component
+        component_dir = feature_root / component
         if not component_dir.exists():
             missing.append(f"Missing skeleton directory: {component_dir}")
             continue
         for record in sample_records[:10]:
-            sample_path = sample_component_path(dataset_dir, component, record.video_file)
+            sample_path = sample_component_path(dataset_dir, frame_sample_count, component, record.video_file)
             if not sample_path.exists():
                 missing.append(f"Missing {component} skeleton for sample '{record.video_file}'")
                 break
@@ -114,16 +125,37 @@ def validate_modality_support(dataset_dir: Path, records: Iterable[SampleRecord]
         )
 
 
-def load_sample_features(dataset_dir: Path, record: SampleRecord, modality: str) -> np.ndarray:
+def load_sample_features(
+    dataset_dir: Path,
+    record: SampleRecord,
+    modality: str,
+    frame_sample_count: int,
+) -> np.ndarray:
     feature_parts: list[np.ndarray] = []
     for component in modality_components(modality):
-        array = load_preprocessed_component(sample_component_path(dataset_dir, component, record.video_file), component)
+        sample_path = sample_component_path(dataset_dir, frame_sample_count, component, record.video_file)
+        try:
+            array = load_preprocessed_component(sample_path, component)
+        except Exception as exc:
+            file_size = sample_path.stat().st_size if sample_path.exists() else "missing"
+            raise RuntimeError(
+                "Failed to load skeleton component "
+                f"video_file='{record.video_file}', gloss='{record.gloss}', "
+                f"participant_id='{record.participant_id}', scenario='{record.scenario}', "
+                f"split='{record.split}', modality='{modality}', component='{component}', "
+                f"path='{sample_path}', file_size_bytes={file_size}."
+            ) from exc
         feature_parts.append(array)
 
     sequence_lengths = {part.shape[0] for part in feature_parts}
     if len(sequence_lengths) != 1:
+        component_shapes = {
+            component: part.shape
+            for component, part in zip(modality_components(modality), feature_parts, strict=True)
+        }
         raise ValueError(
-            f"Sample '{record.video_file}' has inconsistent sequence lengths across modality '{modality}'."
+            f"Sample '{record.video_file}' has inconsistent sequence lengths across modality '{modality}'. "
+            f"Component shapes: {component_shapes}"
         )
     channel_counts = {part.shape[-1] for part in feature_parts}
     if channel_counts != {5}:
@@ -132,7 +164,11 @@ def load_sample_features(dataset_dir: Path, record: SampleRecord, modality: str)
             f"{sorted(channel_counts)}"
         )
 
-    features = np.concatenate(feature_parts, axis=1).reshape(feature_parts[0].shape[0], -1).astype(np.float32)
+    features = (
+        np.concatenate(feature_parts, axis=1)
+        .reshape(feature_parts[0].shape[0], -1)
+        .astype(FEATURE_DTYPE, copy=False)
+    )
     finite_mask = np.isfinite(features)
     if finite_mask.all():
         return features
@@ -149,11 +185,11 @@ def load_sample_features(dataset_dir: Path, record: SampleRecord, modality: str)
             stacklevel=2,
         )
         _WARNED_NONFINITE_SAMPLES.add(key)
-    return np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
+    return np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0).astype(FEATURE_DTYPE, copy=False)
 
 
-class SkeletonSequence(Sequence):
-    """Lazy-loading Keras sequence that loads .npy files per batch."""
+class SkeletonDataset(Dataset):
+    """Lazy-loading dataset that reads .npy files per sample."""
 
     def __init__(
         self,
@@ -161,41 +197,41 @@ class SkeletonSequence(Sequence):
         dataset_dir: Path,
         label_map: dict[str, int],
         modality: str,
-        batch_size: int,
-        shuffle: bool,
-        seed: int,
-        **kwargs,
+        frame_sample_count: int,
     ) -> None:
-        super().__init__(**kwargs)
         self.records = list(records)
         self.dataset_dir = dataset_dir
         self.label_map = label_map
         self.modality = modality
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.rng = np.random.default_rng(seed)
-        self.indexes = np.arange(len(self.records))
-        self.on_epoch_end()
+        self.frame_sample_count = frame_sample_count
 
     def __len__(self) -> int:
-        return math.ceil(len(self.records) / self.batch_size)
+        return len(self.records)
 
-    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray]:
-        start = index * self.batch_size
-        stop = min(start + self.batch_size, len(self.records))
-        batch_indexes = self.indexes[start:stop]
-        batch_records = [self.records[i] for i in batch_indexes]
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        record = self.records[index]
+        features = load_sample_features(
+            self.dataset_dir,
+            record,
+            self.modality,
+            self.frame_sample_count,
+        )
+        label_index = self.label_map[record.gloss]
+        return (
+            torch.from_numpy(features.astype(np.float32, copy=False)),
+            torch.tensor(label_index, dtype=torch.long),
+        )
 
-        batch_x = [load_sample_features(self.dataset_dir, record, self.modality) for record in batch_records]
-        batch_y = [self.label_map[record.gloss] for record in batch_records]
-        one_hot_y = np.eye(len(self.label_map), dtype=np.float32)[batch_y]
-        return np.stack(batch_x, axis=0), one_hot_y
 
-    def on_epoch_end(self) -> None:
-        if self.shuffle:
-            self.rng.shuffle(self.indexes)
+def dataloader_steps(dataset_size: int, batch_size: int) -> int:
+    return math.ceil(dataset_size / batch_size)
 
 
-def infer_input_shape(dataset_dir: Path, record: SampleRecord, modality: str) -> tuple[int, int]:
-    features = load_sample_features(dataset_dir, record, modality)
+def infer_input_shape(
+    dataset_dir: Path,
+    record: SampleRecord,
+    modality: str,
+    frame_sample_count: int,
+) -> tuple[int, int]:
+    features = load_sample_features(dataset_dir, record, modality, frame_sample_count)
     return int(features.shape[0]), int(features.shape[1])

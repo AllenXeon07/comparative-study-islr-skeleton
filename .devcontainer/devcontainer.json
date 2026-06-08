@@ -24,8 +24,5 @@
     },
   
     // Use 'root' to match the Dockerfile or a specific user
-    "remoteUser": "root",
-  
-    // Run a command after the container is created
-    "postCreateCommand": "pip3 install --break-system-packages -r requirements.txt || echo 'No requirements.txt found'"
+    "remoteUser": "root"
   }

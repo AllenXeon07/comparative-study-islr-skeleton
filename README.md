@@ -3,7 +3,7 @@
 # Call python
 /usr/bin/python3 
 
-This repo is set up for sign-language recognition experiments using skeleton landmarks extracted from video files. Training is modality-selectable per run, so you can choose:
+This repo is set up for sign-language recognition experiments using skeleton landmarks extracted from video files. Training is modality-selectable per run, and the training backend uses Keras 3 with the PyTorch backend, so you can choose:
 
 - `hand`
 - `hand_body`
@@ -66,6 +66,12 @@ Install dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+If you are installing manually instead of using Docker, make sure Keras is configured to use the PyTorch backend before importing `keras`:
+
+```bash
+export KERAS_BACKEND=torch
 ```
 
 If you are using the dev container, the repo already includes `.devcontainer/devcontainer.json`.
@@ -164,7 +170,8 @@ python -m training.run_experiments \
   --modality hand_body \
   --epochs 5 \
   --batch-size 8 \
-  --seed 123
+  --seed 123 \
+  --frame-sample-count 30
 ```
 
 ## Run Training From Notebook
@@ -185,7 +192,37 @@ LEARNING_RATE = 0.01
 SEED = 42
 ```
 
-Then run the notebook cells. The notebook calls the same `training.experiment.run_experiment(...)` function used by the CLI.
+Then run the notebook cells. The notebook calls the same `training.experiment.run_experiment(...)` function used by the CLI. Make sure the first notebook cell runs before any direct `keras` import so the PyTorch backend stays selected.
+
+## Run Full Testing Pipeline
+
+Use `run_testing_pipeline.py` to test one video end to end. It reads the saved run `config.json`, preprocesses the video with the modality and frame count used during training, rebuilds the model with the saved input shape and class count, loads weights, then prints the top predictions.
+
+Pass either an experiment run directory:
+
+```bash
+python run_testing_pipeline.py \
+  Dataset/raw/example.mp4 \
+  artifacts/experiments/sd/cnn1d/hand/20260504T175400Z
+```
+
+Or pass a specific weights file:
+
+```bash
+python run_testing_pipeline.py \
+  Dataset/raw/example.mp4 \
+  artifacts/experiments/sd/cnn1d/hand/20260504T175400Z/best.weights.h5 \
+  --top-k 5
+```
+
+If you know the ground-truth gloss, add:
+
+```bash
+python run_testing_pipeline.py \
+  Dataset/raw/example.mp4 \
+  artifacts/experiments/sd/cnn1d/hand/20260504T175400Z \
+  --expected-label APPLE
+```
 
 ## Modality Rules
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+
+os.environ.setdefault("KERAS_BACKEND", "torch")
+
 import numpy as np
-from keras import losses, metrics, ops, optimizers
-from keras import Input, Model
+from keras import Input, Model, losses, metrics, ops, optimizers
 from keras.layers import (
     Add,
     Conv1D,
@@ -17,8 +20,56 @@ from keras.layers import (
     Reshape,
     Bidirectional,
 )
-from keras.ops import einsum
+from keras.metrics import Metric
 from keras.saving import register_keras_serializable
+
+
+MODEL_DTYPE = "float32"
+
+
+@register_keras_serializable(package="training")
+class SparseMacroF1Score(Metric):
+    def __init__(self, num_classes: int, name: str = "f1_score", **kwargs) -> None:
+        super().__init__(name=name, **kwargs)
+        self.num_classes = num_classes
+        self.true_positives = self.add_weight(shape=(num_classes,), initializer="zeros", dtype=MODEL_DTYPE)
+        self.false_positives = self.add_weight(shape=(num_classes,), initializer="zeros", dtype=MODEL_DTYPE)
+        self.false_negatives = self.add_weight(shape=(num_classes,), initializer="zeros", dtype=MODEL_DTYPE)
+
+    def update_state(self, y_true, y_pred, sample_weight=None) -> None:
+        del sample_weight
+        y_true = ops.cast(ops.reshape(y_true, (-1,)), "int32")
+        y_pred = ops.cast(ops.argmax(y_pred, axis=-1), "int32")
+        y_pred = ops.reshape(y_pred, (-1,))
+
+        y_true_one_hot = ops.cast(ops.one_hot(y_true, self.num_classes), MODEL_DTYPE)
+        y_pred_one_hot = ops.cast(ops.one_hot(y_pred, self.num_classes), MODEL_DTYPE)
+
+        true_positives = ops.sum(y_true_one_hot * y_pred_one_hot, axis=0)
+        false_positives = ops.sum((1.0 - y_true_one_hot) * y_pred_one_hot, axis=0)
+        false_negatives = ops.sum(y_true_one_hot * (1.0 - y_pred_one_hot), axis=0)
+
+        self.true_positives.assign_add(true_positives)
+        self.false_positives.assign_add(false_positives)
+        self.false_negatives.assign_add(false_negatives)
+
+    def result(self):
+        precision_denominator = self.true_positives + self.false_positives
+        recall_denominator = self.true_positives + self.false_negatives
+        precision = ops.where(precision_denominator > 0, self.true_positives / precision_denominator, 0.0)
+        recall = ops.where(recall_denominator > 0, self.true_positives / recall_denominator, 0.0)
+        f1_denominator = precision + recall
+        f1 = ops.where(f1_denominator > 0, 2.0 * precision * recall / f1_denominator, 0.0)
+        return ops.mean(f1)
+
+    def reset_state(self) -> None:
+        zeros = ops.zeros((self.num_classes,), dtype=MODEL_DTYPE)
+        self.true_positives.assign(zeros)
+        self.false_positives.assign(zeros)
+        self.false_negatives.assign(zeros)
+
+    def get_config(self) -> dict[str, object]:
+        return {**super().get_config(), "num_classes": self.num_classes}
 
 
 @register_keras_serializable(package="training")
@@ -42,24 +93,27 @@ class GraphConvolution(Layer):
             shape=(node_count, node_count),
             initializer="identity",
             trainable=True,
+            dtype=MODEL_DTYPE,
         )
         self.kernel = self.add_weight(
             name="kernel",
             shape=(input_channels, self.units),
             initializer="glorot_uniform",
             trainable=True,
+            dtype=MODEL_DTYPE,
         )
         self.bias = self.add_weight(
             name="bias",
             shape=(self.units,),
             initializer="zeros",
             trainable=True,
+            dtype=MODEL_DTYPE,
         )
         super().build(input_shape)
 
     def call(self, inputs):
-        mixed_nodes = einsum("ij,btjc->btic", self.adjacency, inputs)
-        outputs = einsum("btic,cu->btiu", mixed_nodes, self.kernel)
+        mixed_nodes = ops.einsum("ij,btjc->btic", self.adjacency, inputs)
+        outputs = ops.einsum("btic,cu->btiu", mixed_nodes, self.kernel)
         outputs = outputs + self.bias
         if self.activation == "relu":
             return ops.relu(outputs)
@@ -76,44 +130,44 @@ class GraphConvolution(Layer):
 
 
 def build_cnn1d(input_shape: tuple[int, int], num_classes: int) -> Model:
-    inputs = Input(shape=input_shape, name="skeleton_sequence")
-    x = Conv1D(128, kernel_size=3, padding="same", activation="relu")(inputs)
+    inputs = Input(shape=input_shape, name="skeleton_sequence", dtype=MODEL_DTYPE)
+    x = Conv1D(128, kernel_size=3, padding="same", activation="relu", dtype=MODEL_DTYPE)(inputs)
     x = Dropout(0.2)(x)
-    x = Conv1D(128, kernel_size=3, padding="same", activation="relu")(x)
+    x = Conv1D(128, kernel_size=3, padding="same", activation="relu", dtype=MODEL_DTYPE)(x)
     x = GlobalAveragePooling1D()(x)
-    x = Dense(128, activation="relu")(x)
-    outputs = Dense(num_classes, activation="softmax", name="class_probs")(x)
+    x = Dense(128, activation="relu", dtype=MODEL_DTYPE)(x)
+    outputs = Dense(num_classes, activation="softmax", name="class_probs", dtype=MODEL_DTYPE)(x)
     return Model(inputs=inputs, outputs=outputs, name="cnn1d_sign_classifier")
 
 
 def build_lstm(input_shape: tuple[int, int], num_classes: int) -> Model:
-    inputs = Input(shape=input_shape, name="skeleton_sequence")
-    x = Bidirectional(LSTM(128, return_sequences=True))(inputs)
+    inputs = Input(shape=input_shape, name="skeleton_sequence", dtype=MODEL_DTYPE)
+    x = Bidirectional(LSTM(128, return_sequences=True, dtype=MODEL_DTYPE))(inputs)
     x = Dropout(0.2)(x)
-    x = Bidirectional(LSTM(64))(x)
-    x = Dense(128, activation="relu")(x)
-    outputs = Dense(num_classes, activation="softmax", name="class_probs")(x)
+    x = Bidirectional(LSTM(64, dtype=MODEL_DTYPE))(x)
+    x = Dense(128, activation="relu", dtype=MODEL_DTYPE)(x)
+    outputs = Dense(num_classes, activation="softmax", name="class_probs", dtype=MODEL_DTYPE)(x)
     return Model(inputs=inputs, outputs=outputs, name="lstm_sign_classifier")
 
 
 def _transformer_block(x, embed_dim: int, num_heads: int, ff_dim: int):
-    attention_output = MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)(x, x)
+    attention_output = MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim, dtype=MODEL_DTYPE)(x, x)
     x = Add()([x, attention_output])
-    x = LayerNormalization()(x)
-    ff = Dense(ff_dim, activation="relu")(x)
-    ff = Dense(int(x.shape[-1]))(ff)
+    x = LayerNormalization(dtype=MODEL_DTYPE)(x)
+    ff = Dense(ff_dim, activation="relu", dtype=MODEL_DTYPE)(x)
+    ff = Dense(int(x.shape[-1]), dtype=MODEL_DTYPE)(ff)
     x = Add()([x, ff])
-    return LayerNormalization()(x)
+    return LayerNormalization(dtype=MODEL_DTYPE)(x)
 
 
 def build_transformer(input_shape: tuple[int, int], num_classes: int) -> Model:
-    inputs = Input(shape=input_shape, name="skeleton_sequence")
-    x = Dense(128)(inputs)
+    inputs = Input(shape=input_shape, name="skeleton_sequence", dtype=MODEL_DTYPE)
+    x = Dense(128, dtype=MODEL_DTYPE)(inputs)
     x = _transformer_block(x, embed_dim=128, num_heads=4, ff_dim=256)
     x = _transformer_block(x, embed_dim=128, num_heads=4, ff_dim=256)
     x = GlobalAveragePooling1D()(x)
     x = Dropout(0.2)(x)
-    outputs = Dense(num_classes, activation="softmax", name="class_probs")(x)
+    outputs = Dense(num_classes, activation="softmax", name="class_probs", dtype=MODEL_DTYPE)(x)
     return Model(inputs=inputs, outputs=outputs, name="transformer_sign_classifier")
 
 
@@ -126,17 +180,17 @@ def build_gcn(input_shape: tuple[int, int], num_classes: int) -> Model:
         )
 
     node_count = feature_count // 5
-    inputs = Input(shape=input_shape, name="skeleton_sequence")
+    inputs = Input(shape=input_shape, name="skeleton_sequence", dtype=MODEL_DTYPE)
     x = Reshape((time_steps, node_count, 5), name="reshape_to_graph")(inputs)
-    x = GraphConvolution(64, activation="relu", name="graph_conv_1")(x)
-    x = LayerNormalization(name="graph_norm_1")(x)
+    x = GraphConvolution(64, activation="relu", name="graph_conv_1", dtype=MODEL_DTYPE)(x)
+    x = LayerNormalization(name="graph_norm_1", dtype=MODEL_DTYPE)(x)
     x = Dropout(0.2, name="graph_dropout_1")(x)
-    x = GraphConvolution(128, activation="relu", name="graph_conv_2")(x)
-    x = LayerNormalization(name="graph_norm_2")(x)
+    x = GraphConvolution(128, activation="relu", name="graph_conv_2", dtype=MODEL_DTYPE)(x)
+    x = LayerNormalization(name="graph_norm_2", dtype=MODEL_DTYPE)(x)
     x = GlobalAveragePooling2D(name="spatiotemporal_pool")(x)
-    x = Dense(128, activation="relu", name="graph_projection")(x)
+    x = Dense(128, activation="relu", name="graph_projection", dtype=MODEL_DTYPE)(x)
     x = Dropout(0.2, name="graph_dropout_2")(x)
-    outputs = Dense(num_classes, activation="softmax", name="class_probs")(x)
+    outputs = Dense(num_classes, activation="softmax", name="class_probs", dtype=MODEL_DTYPE)(x)
     return Model(inputs=inputs, outputs=outputs, name="gcn_sign_classifier")
 
 
@@ -159,10 +213,10 @@ def build_model(
     model = builders[model_name](input_shape=input_shape, num_classes=num_classes)
     model.compile(
         optimizer=optimizers.SGD(learning_rate=learning_rate),
-        loss=losses.CategoricalCrossentropy(),
+        loss=losses.SparseCategoricalCrossentropy(from_logits=False),
         metrics=[
-            metrics.CategoricalAccuracy(name="accuracy"),
-            metrics.F1Score(name="f1_score", average="macro"),
+            metrics.SparseCategoricalAccuracy(name="accuracy"),
+            SparseMacroF1Score(num_classes=num_classes, name="f1_score"),
         ],
     )
     return model

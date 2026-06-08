@@ -6,6 +6,7 @@ import numpy as np
 
 
 LANDMARK_CHANNEL_COUNT = 5
+FEATURE_DTYPE = np.float32
 
 _EXPECTED_SHAPES = {
     "hand": (2, 21),
@@ -13,18 +14,30 @@ _EXPECTED_SHAPES = {
     "face": (478,),
 }
 
-_MISSING_POINT = np.zeros(LANDMARK_CHANNEL_COUNT, dtype=np.float32)
+_MISSING_POINT = np.zeros(LANDMARK_CHANNEL_COUNT, dtype=FEATURE_DTYPE)
 
 
 def _load_raw_component_array(path: Path) -> np.ndarray:
     try:
         array = np.load(path, allow_pickle=False)
+    except EOFError as exc:
+        file_size = path.stat().st_size if path.exists() else "missing"
+        raise EOFError(
+            f"No data left in skeleton file: {path} "
+            f"(file_size_bytes={file_size}). The file is likely empty or partially written."
+        ) from exc
+    except OSError as exc:
+        file_size = path.stat().st_size if path.exists() else "missing"
+        raise OSError(
+            f"Could not read skeleton file: {path} "
+            f"(file_size_bytes={file_size})."
+        ) from exc
     except ValueError as exc:
         raise ValueError(
             f"Unsupported .npy payload at {path}. Expected numeric skeleton arrays; "
             "only keypoint index files should require allow_pickle=True."
         ) from exc
-    return np.asarray(array, dtype=np.float32)
+    return np.asarray(array, dtype=FEATURE_DTYPE)
 
 
 def _normalize_hand_shape(array: np.ndarray) -> np.ndarray:
@@ -77,7 +90,7 @@ def preprocess_component_array(
     component: str,
     array: np.ndarray,
 ) -> np.ndarray:
-    normalized = _normalize_component_shape(component, np.asarray(array, dtype=np.float32))
+    normalized = _normalize_component_shape(component, np.asarray(array, dtype=FEATURE_DTYPE))
     processed = _replace_nan_with_zero(normalized)
     if component == "hand":
         return _flatten_hand_landmarks(processed)

@@ -4,18 +4,22 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-ALLOWED_SCENARIOS = ("sd", "si")
-ALLOWED_MODALITIES = ("hand", "hand_body", "hand_face", "body_hand_face")
+ALLOWED_SCENARIOS = ("si",...) #sd, si
+ALLOWED_MODALITIES = ("hand_face", "body_hand_face") #"hand", "hand_body", "hand_face", "body_hand_face"
 ALLOWED_MODELS = ("cnn1d", "lstm", "transformer", "gcn")
 
 
 @dataclass(slots=True)
 class ExperimentConfig:
-    scenario: str
-    model: str
-    modality: str
-    epochs: int = 10
-    batch_size: int = 8
+    scenario: str = ALLOWED_SCENARIOS[0]
+    model: str = ALLOWED_MODELS[0]
+    modality: str = ALLOWED_MODALITIES[0]
+    frame_sample_count: int = 30
+    epochs: int = 100
+    batch_size: int = 32
+    # Keep notebook/container runs away from PyTorch DataLoader shared-memory
+    # exhaustion. Increase explicitly on hosts with a larger /dev/shm.
+    num_workers: int = 4
     learning_rate: float = 0.01
     seed: int = 42
     dataset_dir: Path = Path("Dataset")

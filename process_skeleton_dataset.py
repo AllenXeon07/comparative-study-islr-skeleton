@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import urllib.request
 from contextlib import ExitStack
@@ -17,7 +18,7 @@ import numpy as np
 BASE_DIR = Path(__file__).resolve().parent
 DATASET_DIR = BASE_DIR / "Dataset"
 RAW_DATASET_DIR = DATASET_DIR / "raw"
-SKELETON_DATASET_DIR = DATASET_DIR / "skeleton" / "raw"
+SKELETON_DATASET_DIR = DATASET_DIR / "skeleton"
 
 HAND_MODEL_PATH = BASE_DIR / "hand_landmarker.task"
 POSE_MODEL_PATH = BASE_DIR / "pose_landmarker.task"
@@ -39,11 +40,11 @@ FACE_MODEL_URL = (
 EXPECTED_HAND_POINTS = 21
 EXPECTED_BODY_POINTS = 33
 EXPECTED_FACE_POINTS = 478
-TARGET_FRAME_COUNT = 10
+DEFAULT_TARGET_FRAME_COUNT = 30
 LANDMARK_CHANNELS = {0: "x", 1: "y", 2: "z", 3: "visibility", 4: "presence"}
 PROCESS_HAND = True
-PROCESS_BODY = False
-PROCESS_FACE = False
+PROCESS_BODY = True
+PROCESS_FACE = True
 
 HAND_KEYPOINT_INDEX = {
     0: "wrist",
@@ -412,7 +413,7 @@ def iter_video_paths(folder_path: Path) -> Iterable[Path]:
             yield path
 
 
-def sample_frame_indices(total_frames: int, sample_count: int = TARGET_FRAME_COUNT) -> list[int]:
+def sample_frame_indices(total_frames: int, sample_count: int = DEFAULT_TARGET_FRAME_COUNT) -> list[int]:
     if total_frames <= 0 or sample_count <= 0:
         return []
 
@@ -505,6 +506,7 @@ def process_video(
     include_hand: bool,
     include_body: bool,
     include_face: bool,
+    frame_sample_count: int,
 ) -> int:
     output_paths = skeleton_output_paths(
         video_path,
@@ -520,7 +522,7 @@ def process_video(
             output_paths[part].parent.mkdir(parents=True, exist_ok=True)
 
     source_frames, fps = load_video_frames_numpy(video_path)
-    sampled_frame_indices = sample_frame_indices(len(source_frames))
+    sampled_frame_indices = sample_frame_indices(len(source_frames), sample_count=frame_sample_count)
     sampled_frames = source_frames[sampled_frame_indices].copy()
     sampled_timestamps_ms = make_timestamps_ms(
         sampled_frame_indices,
@@ -542,7 +544,7 @@ def process_video(
     print(
         "Processing "
         f"{video_path.relative_to(input_root)} "
-        f"({len(source_frames)} source frames -> {TARGET_FRAME_COUNT} sampled frames)"
+        f"({len(source_frames)} source frames -> {frame_sample_count} sampled frames)"
     )
 
     for frame, timestamp_ms in zip(sampled_frames, sampled_timestamps_ms):
@@ -613,7 +615,18 @@ def process_video(
     return sampled_timestamps_ms[-1] + frame_ms
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Process raw videos into sampled skeleton arrays.")
+    parser.add_argument("--frame-sample-count", type=int, default=DEFAULT_TARGET_FRAME_COUNT)
+    return parser
+
+
 def main() -> None:
+    args = build_parser().parse_args()
+    frame_sample_count = args.frame_sample_count
+    if frame_sample_count <= 0:
+        raise ValueError(f"frame_sample_count must be positive (got {frame_sample_count}).")
+
     include_hand = PROCESS_HAND
     include_body = PROCESS_BODY
     include_face = PROCESS_FACE
@@ -622,7 +635,7 @@ def main() -> None:
         raise ValueError("At least one of PROCESS_HAND, PROCESS_BODY, or PROCESS_FACE must be True.")
 
     input_root = RAW_DATASET_DIR.resolve()
-    output_root = SKELETON_DATASET_DIR.resolve()
+    output_root = (SKELETON_DATASET_DIR / f"{frame_sample_count}frame").resolve()
     if not input_root.is_dir():
         raise FileNotFoundError(f"Input root does not exist: {input_root}")
 
@@ -710,6 +723,7 @@ def main() -> None:
                 include_hand,
                 include_body,
                 include_face,
+                frame_sample_count,
             )
 
     print(

@@ -11,7 +11,7 @@
         "config": {
           "batch_shape": [
             null,
-            10,
+            30,
             210
           ],
           "dtype": "float32",
@@ -77,7 +77,7 @@
         "build_config": {
           "input_shape": [
             null,
-            10,
+            30,
             210
           ]
         },
@@ -90,7 +90,7 @@
                 "config": {
                   "shape": [
                     null,
-                    10,
+                    30,
                     210
                   ],
                   "dtype": "float32",
@@ -134,7 +134,7 @@
                 "config": {
                   "shape": [
                     null,
-                    10,
+                    30,
                     128
                   ],
                   "dtype": "float32",
@@ -205,7 +205,7 @@
         "build_config": {
           "input_shape": [
             null,
-            10,
+            30,
             128
           ]
         },
@@ -218,7 +218,7 @@
                 "config": {
                   "shape": [
                     null,
-                    10,
+                    30,
                     128
                   ],
                   "dtype": "float32",
@@ -261,7 +261,7 @@
                 "config": {
                   "shape": [
                     null,
-                    10,
+                    30,
                     128
                   ],
                   "dtype": "float32",
@@ -433,7 +433,7 @@
   },
   "compile_config": {
     "optimizer": {
-      "module": "keras.optimizers",
+      "module": "keras.src.backend.torch.optimizers.torch_sgd",
       "class_name": "SGD",
       "config": {
         "name": "SGD",
@@ -450,17 +450,16 @@
         "momentum": 0.0,
         "nesterov": false
       },
-      "registered_name": null
+      "registered_name": "SGD"
     },
     "loss": {
       "module": "keras.losses",
-      "class_name": "CategoricalCrossentropy",
+      "class_name": "SparseCategoricalCrossentropy",
       "config": {
-        "name": "categorical_crossentropy",
+        "name": "sparse_categorical_crossentropy",
         "reduction": "sum_over_batch_size",
         "from_logits": false,
-        "label_smoothing": 0.0,
-        "axis": -1
+        "ignore_class": null
       },
       "registered_name": null
     },
@@ -468,7 +467,7 @@
     "metrics": [
       {
         "module": "keras.metrics",
-        "class_name": "CategoricalAccuracy",
+        "class_name": "SparseCategoricalAccuracy",
         "config": {
           "name": "accuracy",
           "dtype": "float32"
@@ -476,20 +475,19 @@
         "registered_name": null
       },
       {
-        "module": "keras.metrics",
-        "class_name": "F1Score",
+        "module": "training.models",
+        "class_name": "SparseMacroF1Score",
         "config": {
           "name": "f1_score",
           "dtype": "float32",
-          "average": "macro",
-          "threshold": null
+          "num_classes": 2731
         },
-        "registered_name": null
+        "registered_name": "training>SparseMacroF1Score"
       }
     ],
     "weighted_metrics": null,
     "run_eagerly": false,
     "steps_per_execution": 1,
-    "jit_compile": true
+    "jit_compile": false
   }
 }
