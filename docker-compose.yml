@@ -9,6 +9,7 @@ services:
     gpus: all
     environment:
       - KERAS_BACKEND=torch
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     tty: true

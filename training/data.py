@@ -223,6 +223,71 @@ class SkeletonDataset(Dataset):
         )
 
 
+class PreloadedSkeletonDataset(Dataset):
+    """Dataset backed by already-loaded tensors on CPU or CUDA."""
+
+    def __init__(self, features: torch.Tensor, labels: torch.Tensor) -> None:
+        if len(features) != len(labels):
+            raise ValueError(
+                f"Feature/label length mismatch: features={len(features)} labels={len(labels)}"
+            )
+        self.features = features
+        self.labels = labels
+
+    @classmethod
+    def from_records(
+        cls,
+        records: list[SampleRecord],
+        dataset_dir: Path,
+        label_map: dict[str, int],
+        modality: str,
+        frame_sample_count: int,
+        device: torch.device | str,
+    ) -> "PreloadedSkeletonDataset":
+        if not records:
+            raise ValueError("Cannot preload an empty dataset.")
+
+        first_features = load_sample_features(
+            dataset_dir,
+            records[0],
+            modality,
+            frame_sample_count,
+        )
+        feature_shape = first_features.shape
+        target_device = torch.device(device)
+        features = torch.empty(
+            (len(records), *feature_shape),
+            dtype=torch.float32,
+            device=target_device,
+        )
+        labels = torch.empty(len(records), dtype=torch.long, device=target_device)
+
+        features[0].copy_(torch.from_numpy(first_features.astype(np.float32, copy=False)))
+        labels[0] = label_map[records[0].gloss]
+        for index, record in enumerate(records[1:], start=1):
+            sample_features = load_sample_features(
+                dataset_dir,
+                record,
+                modality,
+                frame_sample_count,
+            )
+            if sample_features.shape != feature_shape:
+                raise ValueError(
+                    f"Sample '{record.video_file}' has shape {sample_features.shape}, "
+                    f"expected {feature_shape}."
+                )
+            features[index].copy_(torch.from_numpy(sample_features.astype(np.float32, copy=False)))
+            labels[index] = label_map[record.gloss]
+
+        return cls(features=features, labels=labels)
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.features[index], self.labels[index]
+
+
 def dataloader_steps(dataset_size: int, batch_size: int) -> int:
     return math.ceil(dataset_size / batch_size)
 

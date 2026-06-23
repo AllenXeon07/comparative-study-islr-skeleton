@@ -126,6 +126,131 @@ python -m training.run_experiments \
   --modality hand_body
 ```
 
+## Run a Limited Overnight Experiment Grid
+
+`run_hand_all_experiments.py` can run the full fair grid or a selected subset.
+Selection order is scenario, then model, then modality.
+
+Preview the full grid without starting training:
+
+```bash
+python run_hand_all_experiments.py --dry-run
+```
+
+Run only SI with two models and one modality:
+
+```bash
+python run_hand_all_experiments.py \
+  --scenarios si \
+  --models cnn1d,lstm \
+  --modalities hand_face \
+  --max-workers 1
+```
+
+Run both scenarios for all models, but only hand-based modalities:
+
+```bash
+python run_hand_all_experiments.py \
+  --scenarios all \
+  --models all \
+  --modalities hand,hand_body \
+  --max-workers 1
+```
+
+Split the complete grid across multiple nights:
+
+```bash
+# First 8 experiments.
+python run_hand_all_experiments.py --start-index 0 --limit 8
+
+# Next 8 experiments.
+python run_hand_all_experiments.py --start-index 8 --limit 8
+```
+
+Available scope flags:
+
+- `--scenarios`: `sd`, `si`, comma-separated values, or `all`
+- `--models`: `cnn1d`, `lstm`, `transformer`, `gcn`, comma-separated values, or `all`
+- `--modalities`: `hand`, `hand_body`, `hand_face`, `body_hand_face`, comma-separated values, or `all`
+- `--max-workers`: number of experiments running concurrently; use `1` for one GPU
+- `--start-index`: skip experiments before this zero-based grid index
+- `--limit`: maximum number of selected experiments to run
+- `--dry-run`: print the selected grid without running it
+
+## Fair Full-Grid Experiment Policy
+
+The complete comparison grid contains 32 experiments:
+
+```text
+2 scenarios x 4 models x 4 modalities
+```
+
+Scenarios:
+
+- `sd`
+- `si`
+
+Models:
+
+- `cnn1d`
+- `lstm`
+- `transformer`
+- `gcn`
+
+Modalities:
+
+- `hand`
+- `hand_body`
+- `hand_face`
+- `body_hand_face`
+
+Every selected experiment receives the same default training policy:
+
+- batch size: `64`
+- evaluation batch size: `64`
+- optimizer: `AdamW`
+- initial learning rate: `0.001`
+- weight decay: `0.0001`
+- global gradient clipping norm: `1.0`
+- ReduceLROnPlateau factor: `0.5`
+- ReduceLROnPlateau patience: `3`
+- minimum learning rate: `0.000001`
+- training partitions: `4`
+- validation fraction inside each partition: `0.2`
+- epochs per partition visit: `20`
+- partition cycles: `3`
+- test partitions: `4`
+- random seed: `128`
+
+The repeat schedule is:
+
+```text
+cycle 1: partition 1 -> partition 2 -> partition 3 -> partition 4
+cycle 2: partition 1 -> partition 2 -> partition 3 -> partition 4
+cycle 3: partition 1 -> partition 2 -> partition 3 -> partition 4
+final test: test partition 1 -> 2 -> 3 -> 4, then aggregate metrics
+```
+
+The model and optimizer state continue across partitions and cycles. Each
+partition is split deterministically into training and validation subsets.
+The held-out scenario test split is never used for training or validation.
+
+For a fair comparison, use scope flags only to decide which experiments run
+overnight. Do not change hyperparameters between selected models, modalities,
+or scenarios.
+
+Preview all 32 experiments:
+
+```bash
+python run_hand_all_experiments.py --dry-run
+```
+
+Run the complete grid sequentially on one GPU:
+
+```bash
+python run_hand_all_experiments.py --max-workers 1
+```
+
 More examples:
 
 Hand only:

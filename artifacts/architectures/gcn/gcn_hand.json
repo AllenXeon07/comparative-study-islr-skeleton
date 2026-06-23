@@ -610,24 +610,26 @@
   },
   "compile_config": {
     "optimizer": {
-      "module": "keras.src.backend.torch.optimizers.torch_sgd",
-      "class_name": "SGD",
+      "module": "keras.src.backend.torch.optimizers.torch_adamw",
+      "class_name": "AdamW",
       "config": {
-        "name": "SGD",
-        "learning_rate": 0.009999999776482582,
-        "weight_decay": null,
+        "name": "adamw",
+        "learning_rate": 9.999999747378752e-05,
+        "weight_decay": 0.0001,
         "clipnorm": null,
-        "global_clipnorm": null,
+        "global_clipnorm": 1.0,
         "clipvalue": null,
         "use_ema": false,
         "ema_momentum": 0.99,
         "ema_overwrite_frequency": null,
         "loss_scale_factor": null,
         "gradient_accumulation_steps": null,
-        "momentum": 0.0,
-        "nesterov": false
+        "beta_1": 0.9,
+        "beta_2": 0.999,
+        "epsilon": 1e-07,
+        "amsgrad": false
       },
-      "registered_name": "SGD"
+      "registered_name": "AdamW"
     },
     "loss": {
       "module": "keras.losses",

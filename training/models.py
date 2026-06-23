@@ -199,6 +199,9 @@ def build_model(
     input_shape: tuple[int, int],
     num_classes: int,
     learning_rate: float,
+    optimizer_name: str = "adamw",
+    weight_decay: float = 0.0001,
+    global_clipnorm: float = 1.0,
 ) -> Model:
     builders = {
         "cnn1d": build_cnn1d,
@@ -210,9 +213,30 @@ def build_model(
         raise ValueError(
             f"Unsupported model '{model_name}'. Expected one of: {', '.join(sorted(builders))}"
         )
+    optimizer_builders = {
+        "adamw": lambda: optimizers.AdamW(
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            global_clipnorm=global_clipnorm,
+        ),
+        "adam": lambda: optimizers.Adam(
+            learning_rate=learning_rate,
+            global_clipnorm=global_clipnorm,
+        ),
+        "sgd": lambda: optimizers.SGD(
+            learning_rate=learning_rate,
+            global_clipnorm=global_clipnorm,
+        ),
+    }
+    if optimizer_name not in optimizer_builders:
+        raise ValueError(
+            f"Unsupported optimizer '{optimizer_name}'. "
+            f"Expected one of: {', '.join(sorted(optimizer_builders))}"
+        )
+
     model = builders[model_name](input_shape=input_shape, num_classes=num_classes)
     model.compile(
-        optimizer=optimizers.SGD(learning_rate=learning_rate),
+        optimizer=optimizer_builders[optimizer_name](),
         loss=losses.SparseCategoricalCrossentropy(from_logits=False),
         metrics=[
             metrics.SparseCategoricalAccuracy(name="accuracy"),
