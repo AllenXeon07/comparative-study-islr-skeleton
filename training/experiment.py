@@ -104,8 +104,14 @@ def _validate_config(config: ExperimentConfig) -> None:
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
+    _write_text(path, json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _write_text(path: Path, payload: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    temporary_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary_path.write_text(payload, encoding="utf-8")
+    temporary_path.replace(path)
 
 
 def _set_seed(seed: int) -> None:
@@ -697,21 +703,62 @@ def run_experiment(config: ExperimentConfig) -> dict[str, object]:
             global_clipnorm=config.global_clipnorm,
         )
 
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    run_id = f"{timestamp}_f{config.frame_sample_count}_s{config.seed}"
     run_dir = (
         config.artifacts_dir
         / "experiments"
         / config.scenario
         / config.model
         / config.modality
-        / timestamp
+        / run_id
     )
     architecture_dir = config.artifacts_dir / "architectures" / config.model
     label_map_dir = config.artifacts_dir / "label_maps"
     checkpoint_path = run_dir / "best.weights.h5"
     final_weights_path = run_dir / "final.weights.h5"
     run_architecture_path = run_dir / "architecture.json"
-    architecture_path = architecture_dir / f"{config.model}_{config.modality}.json"
+    architecture_path = (
+        architecture_dir
+        / f"{config.model}_{config.modality}_{config.frame_sample_count}frame.json"
+    )
+    config_payload = {
+        **config.to_dict(),
+        "input_shape": list(input_shape),
+        "num_classes": len(label_map),
+        "validation_split": split_payload,
+        "keras_backend": keras.backend.backend(),
+        "device": device,
+        "num_workers": effective_num_workers,
+        "cache_device": cache_device,
+        "training_cache_device": training_cache_device,
+    }
+    initial_dataset_manifest = {
+        "scenario": config.scenario,
+        "official_train_size": len(official_train_records),
+        "train_size": len(train_records),
+        "validation_size": len(validation_records),
+        "test_size": len(test_records),
+        "validation_split": split_payload,
+        "completed_cycles": 0,
+        "stopped_early": False,
+        "best_validation_f1": None,
+        "status": "running",
+    }
+    _write_json(run_dir / "config.json", config_payload)
+    _write_json(run_dir / "dataset_manifest.json", initial_dataset_manifest)
+    _write_json(
+        run_dir / "run_status.json",
+        {
+            "status": "running",
+            "started_at_utc": timestamp,
+            "scenario": config.scenario,
+            "model": config.model,
+            "modality": config.modality,
+            "frame_sample_count": config.frame_sample_count,
+            "seed": config.seed,
+        },
+    )
 
     training_callbacks = [TorchMemoryCallback()]
     if not config.validate_during_training:
@@ -953,17 +1000,6 @@ def run_experiment(config: ExperimentConfig) -> dict[str, object]:
         ],
         "test_samples": [record.to_dict() for record in test_records[:25]],
     }
-    config_payload = {
-        **config.to_dict(),
-        "input_shape": list(input_shape),
-        "num_classes": len(label_map),
-        "validation_split": split_payload,
-        "keras_backend": keras.backend.backend(),
-        "device": device,
-        "num_workers": effective_num_workers,
-        "cache_device": cache_device,
-        "training_cache_device": training_cache_device,
-    }
     summary_payload = {
         "scenario": config.scenario,
         "model": config.model,
@@ -994,12 +1030,26 @@ def run_experiment(config: ExperimentConfig) -> dict[str, object]:
     _write_json(run_dir / "test_report.json", test_report)
     _write_json(run_dir / "dataset_manifest.json", dataset_manifest)
     _write_json(run_dir / "summary.json", summary_payload)
+    _write_json(
+        run_dir / "run_status.json",
+        {
+            "status": "completed",
+            "started_at_utc": timestamp,
+            "completed_at_utc": datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ"),
+            "scenario": config.scenario,
+            "model": config.model,
+            "modality": config.modality,
+            "frame_sample_count": config.frame_sample_count,
+            "seed": config.seed,
+            "metrics": metrics_payload,
+        },
+    )
     _write_json(label_map_dir / f"{config.scenario}_labels.json", label_map)
 
     architecture_dir.mkdir(parents=True, exist_ok=True)
     architecture_json = model.to_json(indent=2)
-    architecture_path.write_text(architecture_json, encoding="utf-8")
-    run_architecture_path.write_text(architecture_json, encoding="utf-8")
+    _write_text(architecture_path, architecture_json)
+    _write_text(run_architecture_path, architecture_json)
 
     return {
         "run_dir": str(run_dir),

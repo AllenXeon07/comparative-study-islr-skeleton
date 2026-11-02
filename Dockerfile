@@ -21,8 +21,10 @@ RUN python -m pip install --no-cache-dir \
     mediapipe \
     notebook \
     opencv-python \
+    openpyxl \
     pandas \
-    scikit-learn
+    scikit-learn \
+    scipy
 RUN python -m pip install --no-cache-dir \
     torch \
     torchvision \
